@@ -1,0 +1,129 @@
+---
+title: "N-gram Model"
+author: "Zine Eddine"
+date: '2022-08-23'
+output: html_document
+---
+loading packages
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(markovchain)
+library(reshape)
+library(tidyr)
+library(r2r)
+library(stringr)
+```
+
+loading data
+```{r, echo=FALSE}
+data.size <- 4
+
+data.blogs <- readLines("final/en_US/en_US.blogs.txt", data.size)
+data.news <- readLines("final/en_US/en_US.news.txt", data.size)
+data.twitter <- readLines("final/en_US/en_US.twitter.txt", data.size)
+```
+
+merging all the data
+```{r, echo=FALSE}
+df.blogs <- data.frame(blogs = data.blogs)
+df.news <- data.frame(news = data.news)
+df.twitter <- data.frame(twitter = data.twitter)
+```
+
+
+```{r, echo=FALSE}
+df.all <- mapply(rbind, df.blogs, df.news, df.twitter)
+colnames(df.all) <- "text"
+```
+
+preprocessing the data
+```{r}
+df.all.prep <- str_replace_all(df.all, "[[:punct:]]", "")
+df.all.prep <- paste("_s_>", df.all.prep, "<_e_>")
+df.all.prep <- data.frame(text = df.all.prep)
+```
+
+getting ngrams
+```{r}
+all.unigrams <- df.all.prep %>%
+                      unnest_tokens(ngram, text, token = "ngrams", n = 1)
+
+all.bigrams <- df.all.prep %>%
+                      unnest_tokens(ngram, text, token = "ngrams", n = 2)
+
+all.trigrams <- df.all.prep %>%
+                      unnest_tokens(ngram, text, token = "ngrams", n = 3)
+```
+
+getting counts
+```{r, echo=FALSE}
+ngram.count <- function(x) {
+  
+  freq.table <- table(x)
+  freq.ngrams <- data.frame(ngram = names(freq.table), freq = as.numeric(freq.table))
+  rownames(freq.ngrams) <- freq.ngrams$ngram
+  
+  return(freq.ngrams)
+}
+
+all.unigrams.count <- ngram.count(all.unigrams)
+all.bigrams.count <- ngram.count(all.bigrams)
+all.trigrams.coutn <- ngram.count(all.trigrams)
+```
+
+```{r}
+dim(all.unigrams.count)
+```
+```{r}
+unigram.names <- all.unigrams.count$ngram
+possible.bigrams <- expand.grid(unigram.names, unigram.names)
+possible.bigrams <- paste(possible.bigrams$Var1, possible.bigrams$Var2)
+```
+
+```{r}
+all.bigrams.hash <- hashmap()
+all.bigrams.hash[all.bigrams.count$ngram] <- all.bigrams.count$freq
+all.bigrams.hash[["_s_ 14915"]]
+```
+
+```{r}
+possible.bigrams.freq <- sapply(possible.bigrams, function(x){
+  freq <- all.bigrams.hash[[x]]
+  
+  if (length(freq) == 0) {
+    freq <- 1
+  }
+  freq
+})
+```
+
+```{r}
+dim.mat <- length(unigram.names)
+prob.matrix <- matrix(possible.bigrams.freq, nrow = dim.mat)
+colnames(prob.matrix) <- unigram.names
+rownames(prob.matrix) <- unigram.names
+
+input.count <- all.unigrams.count$freq
+
+prob.matrix <- apply(prob.matrix, 2, function(x){
+ #log(x) - log(input.count + dim.mat)
+ x / (input.count + dim.mat)
+})
+
+View(prob.matrix)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
